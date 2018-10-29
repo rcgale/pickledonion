@@ -1,6 +1,9 @@
-from distutils.core import setup
+import setuptools
 
-setup(
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
     name='pickledonion',
     version='0.0.1',
     author='Robert Gale',
