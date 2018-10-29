@@ -13,7 +13,7 @@ It might work in python2 but I haven't had any reason to check yet.
 
 ## How it works
 
-First, mark the function you want to cache with the `@pickledonion.cacheable()` decorator. The input arguments and the return objects must be [picklable](https://docs.python.org/3/library/pickle.html). The input arguments will be serialized and hashed for use as the cache key, so keep that in mind if your input arguments are very large.
+First, mark the function you want to cache with the `@pickledonion.cacheable()` decorator. The input arguments and the return objects must be [picklable](https://docs.python.org/3/library/pickle.html#what-can-be-pickled-and-unpickled). The input arguments will be serialized and hashed for use as the cache key, so keep that in mind if your input arguments are very large.
 
 ```python
 import pickledonion
