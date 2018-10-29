@@ -1,5 +1,5 @@
 # pickledonion
-Python disk caching (using pickle) which encourages configuration on the outer layers of the program (like in the "onion" architecture)
+Python disk caching (using pickle) which encourages configuration on the outer layers of the program (like in the "onion" or "clean" architecture)
 
 ## Installation
 
