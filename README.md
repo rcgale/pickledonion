@@ -1,7 +1,7 @@
 # pickledonion
 Python pickle disk caching which encourages configuration on the outer layers of an "onion" architecture
 
-# How it works
+## How it works
 
 First, mark the function you want to cache with the `@pickledonion.cacheable()` decorator. The input arguments and the return objects must be [picklable](https://docs.python.org/3/library/pickle.html). The input arguments will be serialized and hashed for use as the cache key, so keep that in mind if your input arguments are very large.
 
