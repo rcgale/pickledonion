@@ -1,5 +1,15 @@
 # pickledonion
-Python pickle disk caching which encourages configuration on the outer layers of an "onion" architecture
+Python disk caching (using pickle) which encourages configuration on the outer layers of the program (like in the "onion" architecture)
+
+## installation
+
+It's up on PyPI, so you can just
+
+```bash
+pip3 install pickledonion
+```
+
+It might work in python2 but I haven't had any reason to check yet.
 
 ## How it works
 
