@@ -13,12 +13,14 @@ def my_cached_function(arg1, arg2, arg3):
     return do_something_resource_intensive(arg1, arg2, arg3)
 ```
 
-Now, preferably on the outermost layer of your program, set the directory you would like to use for cache storage.
+Now, preferably on the outermost layer of your program, set the directory you would like to use for your entire system's cache storage.
 
 ```python
 if __name__ == "__main__":
     with pickledonion.CacheContext(cache_dir="_cache/"):
         bigresult = my_cached_function(arg1, arg2, arg3)
 ```
+
+Caching can be completely disabled by removing this `with` context, and all your `@pickledonion.cacheable()` functions will simply run uncached.
 
 Having the cache configuration as far outside the architecture as possible means the deeper layers aren't tied to filesystem specifics. And that's the entire point of this package. I hope you enjoy.
