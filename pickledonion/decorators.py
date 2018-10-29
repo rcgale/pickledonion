@@ -4,7 +4,7 @@ import pickle
 
 import pickledonion
 
-CACHE_DIR = None # Note: Set the cache directory using `with PicklecacheContext(cache_dir="/path/to/dir"):`
+CACHE_DIR = None # Note: Set the cache directory using `with pickledonion.CacheContext(cache_dir="/path/to/dir"):`
 
 
 def cacheable(*cacheargs):
