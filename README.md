@@ -28,7 +28,12 @@ Now, preferably on the outermost layer of your program, set the directory you wo
 ```python
 if __name__ == "__main__":
     with pickledonion.CacheContext(cache_dir="_cache/"):
+        # `my_cached_function()` now caches to the path `_cache/my_cached_function_[hashkey(arg1, arg2, arg3)].pkl`
         bigresult = my_cached_function(arg1, arg2, arg3)
+
+        # You might as well stay in this context for the rest of your program. Then you
+        # can add new `@pickledonion.cacheable()` functions willy-nilly
+        main()
 ```
 
 Caching can be completely disabled by removing this `with` context, and all your `@pickledonion.cacheable()` functions will simply run uncached.
