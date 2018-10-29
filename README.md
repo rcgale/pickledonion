@@ -1,7 +1,7 @@
 # pickledonion
 Python disk caching (using pickle) which encourages configuration on the outer layers of the program (like in the "onion" architecture)
 
-## installation
+## Installation
 
 It's up on PyPI, so you can just
 
