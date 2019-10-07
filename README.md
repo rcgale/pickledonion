@@ -36,6 +36,6 @@ if __name__ == "__main__":
         main()
 ```
 
-Caching can be completely disabled by removing this `with` context, and all your `@pickledonion.cacheable()` functions will simply run uncached.
+Caching can be completely disabled by setting the `cache_dir` to `None`, and all your `@pickledonion.cacheable()` functions will simply run uncached.
 
 Having the cache configuration as far outside the architecture as possible means the deeper layers aren't tied to filesystem specifics. And that's the entire point of this package. I hope you enjoy.
