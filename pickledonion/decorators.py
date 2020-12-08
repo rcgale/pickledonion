@@ -1,5 +1,5 @@
+import functools
 import hashlib
-import multiprocessing
 import os
 import pickle
 import shutil
@@ -13,13 +13,20 @@ _LOCK_DIR = "__cache_locks"
 
 def cacheable(*cacheargs):
     def wrapper(function):
+        @functools.wraps(function)
         def getinstance(*args, **kwargs):
             if CACHE_DIR is None:
                 return function(*args, **kwargs)
 
+            if hasattr(function, '__module__') and hasattr(function, '__qualname__'):
+                module_name = function.__module__
+                qual_name = function.__qualname__
+            else:
+                raise NotImplementedError(f'Unsupported function type `{type(function).__qualname__}`')
+
             cache_key = "{m}/{fn}/{h}".format(
-                m=function.__module__,
-                fn=function.__name__,
+                m=module_name,
+                fn=qual_name,
                 h=__get_hash((args, kwargs))
             )
             return __get_cached(
@@ -27,8 +34,6 @@ def cacheable(*cacheargs):
                 path=cache_key,
                 get=lambda: function(*args, **kwargs),
             )
-        getinstance.__dict__ = function.__dict__.copy() # Being friendly to other decorators
-        getinstance.original_function = function # Pretty hacky. But this is useful information.
         return getinstance
     return wrapper
 
