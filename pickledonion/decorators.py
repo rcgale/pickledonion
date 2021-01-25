@@ -39,7 +39,7 @@ def cacheable(*cacheargs):
 
 
 class CacheContext(object):
-    def __init__(self, *args, cache_dir, clear_locks=True):
+    def __init__(self, *args, cache_dir, clear_locks=False):
         self.previous_cache_dir = pickledonion.decorators.CACHE_DIR
         self.context_cache_dir = cache_dir
         self.clear_locks = clear_locks
@@ -51,7 +51,7 @@ class CacheContext(object):
         return self
 
     def __exit__(self, *args):
-        self.__clear_locks()
+        self.__delete_empty_lock_dirs()
         pickledonion.decorators.CACHE_DIR = self.previous_cache_dir
 
     def __clear_locks(self):
@@ -60,28 +60,43 @@ class CacheContext(object):
             if os.path.exists(lock_dir):
                 shutil.rmtree(lock_dir)
 
+    def __delete_empty_lock_dirs(self):
+        root = os.path.join(self.context_cache_dir, _LOCK_DIR)
+        deleted = set()
+        for path, subdirs, files in os.walk(root, topdown=False):
+            still_has_subdirs = any(
+                subdir for subdir in subdirs
+                if os.path.join(path, subdir) not in deleted
+            )
+            if not len(files) and not still_has_subdirs:
+                try:
+                    os.rmdir(path)
+                    deleted.add(path)
+                except OSError:
+                    pass  # Directory not empty. Ignore for concurrency.
+
 
 class FileLock(object):
     def __init__(self, lock_path):
         self.lock_path = lock_path
 
     def __enter__(self):
-        os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
         while True:
             try:
+                os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
                 self.fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
                 break
-            except FileExistsError as e:
+            except (FileExistsError, FileNotFoundError, OSError) as e:
                 time.sleep(0.001)
-
 
     def __exit__(self, *args):
         try:
             os.close(self.fd)
             os.remove(self.lock_path)
         except OSError as e:
-            print("pickledonion warning: tried to remove cache lock which didn't exist: {}".format(self.lock_path), file=sys.stderr)
-
+            print("pickledonion warning: tried to remove cache lock which didn't exist: {}. Inner exception: {}".format(
+                self.lock_path, e
+            ), file=sys.stderr)
 
 def __get_hash(args):
     picklestring = pickle.dumps(args)
