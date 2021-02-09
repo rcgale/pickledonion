@@ -61,6 +61,8 @@ class CacheContext(object):
                 shutil.rmtree(lock_dir)
 
     def __delete_empty_lock_dirs(self):
+        if pickledonion.decorators.CACHE_DIR is None:
+            return
         root = os.path.join(self.context_cache_dir, _LOCK_DIR)
         deleted = set()
         for path, subdirs, files in os.walk(root, topdown=False):
@@ -77,17 +79,24 @@ class CacheContext(object):
 
 
 class FileLock(object):
-    def __init__(self, lock_path):
+    def __init__(self, lock_path, warning_timeout=30, error_timeout=None):
         self.lock_path = lock_path
+        self.warning_timeout = warning_timeout
+        self.error_timeout = error_timeout
 
     def __enter__(self):
+        SLEEP_INTERVAL = 0.001
+        total_slept = 0.0
+        been_warned = False
         while True:
             try:
                 os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
                 self.fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
                 break
             except (FileExistsError, FileNotFoundError, OSError) as e:
-                time.sleep(0.001)
+                time.sleep(SLEEP_INTERVAL)
+                been_warned = self._handle_timeouts(total_slept, been_warned)
+                total_slept += SLEEP_INTERVAL
 
     def __exit__(self, *args):
         try:
@@ -97,6 +106,27 @@ class FileLock(object):
             print("pickledonion warning: tried to remove cache lock which didn't exist: {}. Inner exception: {}".format(
                 self.lock_path, e
             ), file=sys.stderr)
+
+    def _handle_timeouts(self, total_slept, been_warned):
+        if total_slept > self.error_timeout:
+            message = "Could not acquire file lock for {} after {} seconds.".format(
+                self.lock_path, self.error_timeout)
+            raise TimeoutError(message)
+        elif not been_warned and total_slept > self.warning_timeout:
+            if self.error_timeout:
+                message = (
+                    "Warning: Could not acquire lock for {} seconds. "
+                    "Error will be raised after {} seconds total."
+                ).format(self.warning_timeout, self.error_timeout)
+            else:
+                message = (
+                    "Warning: Could not acquire lock for {} seconds. "
+                    "No error timeout specified, will wait for lock indefinitely."
+                ).format(self.warning_timeout)
+            print(message, file=sys.stderr)
+            been_warned = True
+        return been_warned
+
 
 def __get_hash(args):
     picklestring = pickle.dumps(args)
