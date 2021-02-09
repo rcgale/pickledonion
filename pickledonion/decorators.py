@@ -108,11 +108,11 @@ class FileLock(object):
             ), file=sys.stderr)
 
     def _handle_timeouts(self, total_slept, been_warned):
-        if total_slept > self.error_timeout:
+        if self.error_timeout is not None and total_slept > self.error_timeout:
             message = "Could not acquire file lock for {} after {} seconds.".format(
                 self.lock_path, self.error_timeout)
             raise TimeoutError(message)
-        elif not been_warned and total_slept > self.warning_timeout:
+        elif not been_warned and self.warning_timeout is not None and total_slept > self.warning_timeout:
             if self.error_timeout:
                 message = (
                     "Warning: Could not acquire lock for {} seconds. "
