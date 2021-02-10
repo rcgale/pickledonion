@@ -115,14 +115,14 @@ class FileLock(object):
         elif not been_warned and self.warning_timeout is not None and total_slept > self.warning_timeout:
             if self.error_timeout:
                 message = (
-                    "Warning: Could not acquire lock for {} seconds. "
+                    "Warning: Could not acquire lock for {} after {} seconds. "
                     "Error will be raised after {} seconds total."
-                ).format(self.warning_timeout, self.error_timeout)
+                ).format(self.lock_path, self.warning_timeout, self.error_timeout)
             else:
                 message = (
-                    "Warning: Could not acquire lock for {} seconds. "
+                    "Warning: Could not acquire lock for {} after {} seconds. "
                     "No error timeout specified, will wait for lock indefinitely."
-                ).format(self.warning_timeout)
+                ).format(self.lock_path, self.warning_timeout)
             print(message, file=sys.stderr)
             been_warned = True
         return been_warned
