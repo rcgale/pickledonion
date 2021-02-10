@@ -6,9 +6,8 @@ import shutil
 import sys
 import time
 
-import pickledonion
-
 _LOCK_DIR = "__cache_locks"
+
 
 def cacheable(*cacheargs):
     def wrapper(function):
@@ -79,7 +78,7 @@ class CacheContext(object):
 
 class FileLock(object):
     def __init__(self, lock_path, lock_timeout_warning, lock_timeout):
-        self.lock_path = lock_path
+        self.lock_path = os.path.abspath(lock_path)
         self.lock_timeout_warning = lock_timeout_warning
         self.lock_timeout = lock_timeout
 
@@ -108,20 +107,24 @@ class FileLock(object):
 
     def _handle_timeouts(self, total_slept, been_warned):
         if self.lock_timeout is not None and total_slept > self.lock_timeout:
-            message = "Could not acquire file lock for {} after {} seconds.".format(
-                self.lock_path, self.lock_timeout)
+            message = (
+                "Could not acquire file lock for {} after {} seconds.\n\n"
+                "Path: {}"
+            ).format(self.lock_timeout, self.lock_path)
             raise TimeoutError(message)
         elif not been_warned and self.lock_timeout_warning is not None and total_slept > self.lock_timeout_warning:
             if self.lock_timeout:
                 message = (
-                    "Warning: Could not acquire lock for {} after {} seconds. "
-                    "Error will be raised after {} seconds total."
-                ).format(self.lock_path, self.lock_timeout_warning, self.lock_timeout)
+                    "Warning: Could not acquire lock after {} seconds. "
+                    "Error will be raised after {} seconds total.\n\n"
+                    "Path: {}"
+                ).format(self.lock_timeout_warning, self.lock_timeout, self.lock_path)
             else:
                 message = (
-                    "Warning: Could not acquire lock for {} after {} seconds. "
-                    "No error timeout specified, will wait for lock indefinitely."
-                ).format(self.lock_path, self.lock_timeout_warning)
+                    "Warning: Could not acquire lock after {} seconds. "
+                    "No error timeout specified, will wait for lock indefinitely.\n\n"
+                    "Path: {}"
+                ).format(self.lock_timeout_warning, self.lock_path)
             print(message, file=sys.stderr)
             been_warned = True
         return been_warned
