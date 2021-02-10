@@ -8,16 +8,12 @@ import time
 
 import pickledonion
 
-CACHE_DIR = None # Note: Set the cache directory using `with pickledonion.CacheContext(cache_dir="/path/to/dir"):`
 _LOCK_DIR = "__cache_locks"
 
 def cacheable(*cacheargs):
     def wrapper(function):
         @functools.wraps(function)
         def getinstance(*args, **kwargs):
-            if CACHE_DIR is None:
-                return function(*args, **kwargs)
-
             if hasattr(function, '__module__') and hasattr(function, '__qualname__'):
                 module_name = function.__module__
                 qual_name = function.__qualname__
@@ -30,7 +26,6 @@ def cacheable(*cacheargs):
                 h=__get_hash((args, kwargs))
             )
             return __get_cached(
-                dir=CACHE_DIR,
                 path=cache_key,
                 get=lambda: function(*args, **kwargs),
             )
@@ -39,29 +34,33 @@ def cacheable(*cacheargs):
 
 
 class CacheContext(object):
-    def __init__(self, *args, cache_dir, clear_locks=False):
-        self.previous_cache_dir = pickledonion.decorators.CACHE_DIR
+    current = None
+
+    def __init__(self, *args, cache_dir, clear_locks=False, lock_timeout=None, lock_timeout_warning=30):
+        self.outer_context = CacheContext.current
         self.context_cache_dir = cache_dir
         self.clear_locks = clear_locks
+        self.lock_timeout = lock_timeout
+        self.lock_timeout_warning = lock_timeout_warning
 
     def __enter__(self):
-        pickledonion.decorators.CACHE_DIR = self.context_cache_dir
+        CacheContext.current = self
         if self.clear_locks:
             self.__clear_locks()
         return self
 
     def __exit__(self, *args):
         self.__delete_empty_lock_dirs()
-        pickledonion.decorators.CACHE_DIR = self.previous_cache_dir
+        CacheContext.current = self.outer_context
 
     def __clear_locks(self):
-        if pickledonion.decorators.CACHE_DIR is not None:
+        if self.context_cache_dir:
             lock_dir = os.path.join(self.context_cache_dir, _LOCK_DIR)
             if os.path.exists(lock_dir):
                 shutil.rmtree(lock_dir)
 
     def __delete_empty_lock_dirs(self):
-        if pickledonion.decorators.CACHE_DIR is None:
+        if self.context_cache_dir is None:
             return
         root = os.path.join(self.context_cache_dir, _LOCK_DIR)
         deleted = set()
@@ -79,10 +78,10 @@ class CacheContext(object):
 
 
 class FileLock(object):
-    def __init__(self, lock_path, warning_timeout=30, error_timeout=None):
+    def __init__(self, lock_path, lock_timeout_warning, lock_timeout):
         self.lock_path = lock_path
-        self.warning_timeout = warning_timeout
-        self.error_timeout = error_timeout
+        self.lock_timeout_warning = lock_timeout_warning
+        self.lock_timeout = lock_timeout
 
     def __enter__(self):
         SLEEP_INTERVAL = 0.001
@@ -108,21 +107,21 @@ class FileLock(object):
             ), file=sys.stderr)
 
     def _handle_timeouts(self, total_slept, been_warned):
-        if self.error_timeout is not None and total_slept > self.error_timeout:
+        if self.lock_timeout is not None and total_slept > self.lock_timeout:
             message = "Could not acquire file lock for {} after {} seconds.".format(
-                self.lock_path, self.error_timeout)
+                self.lock_path, self.lock_timeout)
             raise TimeoutError(message)
-        elif not been_warned and self.warning_timeout is not None and total_slept > self.warning_timeout:
-            if self.error_timeout:
+        elif not been_warned and self.lock_timeout_warning is not None and total_slept > self.lock_timeout_warning:
+            if self.lock_timeout:
                 message = (
                     "Warning: Could not acquire lock for {} after {} seconds. "
                     "Error will be raised after {} seconds total."
-                ).format(self.lock_path, self.warning_timeout, self.error_timeout)
+                ).format(self.lock_path, self.lock_timeout_warning, self.lock_timeout)
             else:
                 message = (
                     "Warning: Could not acquire lock for {} after {} seconds. "
                     "No error timeout specified, will wait for lock indefinitely."
-                ).format(self.lock_path, self.warning_timeout)
+                ).format(self.lock_path, self.lock_timeout_warning)
             print(message, file=sys.stderr)
             been_warned = True
         return been_warned
@@ -133,9 +132,14 @@ def __get_hash(args):
     return hashlib.sha224(picklestring).hexdigest()
 
 
-def __get_cached(dir, path, get):
-    with FileLock(os.path.join(dir, _LOCK_DIR, path + ".lock")):
-        full_path = os.path.join(dir, path + ".pkl")
+def __get_cached(path, get):
+    context: CacheContext = CacheContext.current
+    if context is None or getattr(context, 'context_cache_dir', None) is None:
+        return get()
+
+    lock_path = os.path.join(context.context_cache_dir, _LOCK_DIR, path + ".lock")
+    with FileLock(lock_path, lock_timeout_warning=context.lock_timeout_warning, lock_timeout=context.lock_timeout):
+        full_path = os.path.join(context.context_cache_dir, path + ".pkl")
         if os.path.isfile(full_path):
             try:
                 with open(full_path, "rb") as filehandle:
