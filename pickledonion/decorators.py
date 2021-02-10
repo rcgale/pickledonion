@@ -79,7 +79,10 @@ class CacheContext(object):
 
 class FileLock(object):
     def __init__(self, lock_path, lock_timeout_warning, lock_timeout):
-        signal(SIGINT, self._sigint_handler)
+        try:
+            signal(SIGINT, self._sigint_handler)
+        except ValueError:
+            pass
         self.lock_path = os.path.abspath(lock_path)
         self.lock_timeout_warning = lock_timeout_warning
         self.lock_timeout = lock_timeout
@@ -108,6 +111,7 @@ class FileLock(object):
             ), file=sys.stderr)
 
     def _sigint_handler(self, signal_received, frame):
+        # Thanks: https://aalvarez.me/posts/gracefully-exiting-python-context-managers-on-ctrl-c/
         self.__exit__(None, None, None)
         sys.exit(0)
 
