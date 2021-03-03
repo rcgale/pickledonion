@@ -103,17 +103,23 @@ class FileLock(object):
 
     def __exit__(self, *args):
         try:
-            os.close(self.fd)
-            os.remove(self.lock_path)
+            if self.fd is not None:
+                os.close(self.fd)
+                self.fd = None
+            if self.lock_path is not None:
+                os.remove(self.lock_path)
+                self.lock_path = None
         except OSError as e:
             print("pickledonion warning: tried to remove cache lock which didn't exist: {}. Inner exception: {}".format(
                 self.lock_path, e
             ), file=sys.stderr)
 
     def _sigint_handler(self, signal_received, frame):
-        # Thanks: https://aalvarez.me/posts/gracefully-exiting-python-context-managers-on-ctrl-c/
-        self.__exit__(None, None, None)
-        sys.exit(0)
+        try:
+            # Thanks: https://aalvarez.me/posts/gracefully-exiting-python-context-managers-on-ctrl-c/
+            self.__exit__(None, None, None)
+        finally:
+            sys.exit()
 
     def _handle_timeouts(self, total_slept, been_warned):
         if self.lock_timeout is not None and total_slept > self.lock_timeout:
