@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='pickledonion',
-    version='1.0.2',
+    version='1.0.3',
     author='Robert Gale',
     author_email='rcgale@gmail.com',
     packages=['pickledonion'],

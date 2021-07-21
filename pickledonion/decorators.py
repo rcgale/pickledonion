@@ -1,5 +1,5 @@
 import functools
-import hashlib
+import logging
 import os
 import pickle
 import shutil
@@ -7,11 +7,16 @@ import sys
 import time
 from signal import SIGINT, signal
 
+from pickledonion.hashing import _get_hash
+
 _LOCK_DIR = "__cache_locks"
 
 
 def cacheable(*cacheargs):
     def wrapper(function):
+        if not _hash_integrity_intact():
+            return function
+
         @functools.wraps(function)
         def getinstance(*args, **kwargs):
             if hasattr(function, '__module__') and hasattr(function, '__qualname__'):
@@ -23,7 +28,7 @@ def cacheable(*cacheargs):
             cache_key = "{m}/{fn}/{h}".format(
                 m=module_name,
                 fn=qual_name,
-                h=__get_hash((args, kwargs))
+                h=_get_hash((args, kwargs))
             )
             return __get_cached(
                 path=cache_key,
@@ -146,11 +151,6 @@ class FileLock(object):
         return been_warned
 
 
-def __get_hash(args):
-    picklestring = pickle.dumps(args)
-    return hashlib.sha224(picklestring).hexdigest()
-
-
 def __get_cached(path, get):
     context: CacheContext = CacheContext.current
     if context is None or getattr(context, 'context_cache_dir', None) is None:
@@ -173,5 +173,11 @@ def __get_cached(path, get):
         return obj
 
 
-# SANITY CHECK
-assert(__get_hash((1,2,3,4,"a","b","c","d")) == "3aa9afff3e2a9fb63fead865517905583078f3f72bda3e22f8771a61")
+@functools.lru_cache(maxsize=None)
+def _hash_integrity_intact():
+    logging.warning(f"Hash integrity problem. Bypassing pickledonion caching.")
+    return _get_hash(_TEST_OBJ) == _TEST_HASH
+
+
+_TEST_OBJ = (1,2,3,4,"a","b","c","d")
+_TEST_HASH = "3aa9afff3e2a9fb63fead865517905583078f3f72bda3e22f8771a61"
