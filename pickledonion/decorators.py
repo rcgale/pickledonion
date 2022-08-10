@@ -14,11 +14,11 @@ _LOCK_DIR = "__cache_locks"
 
 def cacheable(*cacheargs):
     def wrapper(function):
-        if not _hash_integrity_intact():
-            return function
-
         @functools.wraps(function)
         def getinstance(*args, **kwargs):
+            if CacheContext.current is None:
+                return function(*args, **kwargs)
+
             if hasattr(function, '__module__') and hasattr(function, '__qualname__'):
                 module_name = function.__module__
                 qual_name = function.__qualname__
@@ -28,12 +28,13 @@ def cacheable(*cacheargs):
             cache_key = "{m}/{fn}/{h}".format(
                 m=module_name,
                 fn=qual_name,
-                h=_get_hash((args, kwargs))
+                h=_get_hash((args, kwargs), protocol=CacheContext.current.pickle_protocol)
             )
-            return __get_cached(
+            return _get_cached(
                 path=cache_key,
                 get=lambda: function(*args, **kwargs),
             )
+
         return getinstance
     return wrapper
 
@@ -41,21 +42,37 @@ def cacheable(*cacheargs):
 class CacheContext(object):
     current = None
 
-    def __init__(self, *args, cache_dir, clear_locks=False, lock_timeout=None, lock_timeout_warning=30):
+    def __init__(
+            self,
+            *args,
+            cache_dir,
+            clear_locks=False,
+            lock_timeout=None,
+            lock_timeout_warning=30,
+            pickle_protocol=None
+    ):
         self.outer_context = CacheContext.current
         self.context_cache_dir = cache_dir
         self.clear_locks = clear_locks
         self.lock_timeout = lock_timeout
         self.lock_timeout_warning = lock_timeout_warning
+        self.pickle_protocol = pickle_protocol
 
     def __enter__(self):
         CacheContext.current = self
         if self.clear_locks:
             self.__clear_locks()
+        self.pickle_protocol = _get_cached("pickledonion.protocol", lambda: _pickle_protocol(self.pickle_protocol))
+        if not _hash_integrity_intact(self.pickle_protocol):
+            logging.warning(f"Hash integrity problem. Bypassing pickledonion caching.")
+            self.__exit__()
         return self
 
     def __exit__(self, *args):
+        if CacheContext.current != self:
+            return
         self.__delete_empty_lock_dirs()
+        self.pickle_protocol = None
         CacheContext.current = self.outer_context
 
     def __clear_locks(self):
@@ -151,7 +168,7 @@ class FileLock(object):
         return been_warned
 
 
-def __get_cached(path, get):
+def _get_cached(path, get):
     context: CacheContext = CacheContext.current
     if context is None or getattr(context, 'context_cache_dir', None) is None:
         return get()
@@ -169,15 +186,28 @@ def __get_cached(path, get):
         obj = get()
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "wb") as filehandle:
-            pickle.dump(obj, filehandle, protocol=pickle.HIGHEST_PROTOCOL)
+            try:
+                pickle.dump(obj, filehandle, protocol=context.pickle_protocol)
+            except Exception as e:
+                raise RuntimeError("Failed to place object in pickledonion cache: {}".format(e)) from e
         return obj
 
 
+@cacheable()
+def _pickle_protocol(override_protocol: int = None):
+    # We want this to come from the cache if available.
+    return override_protocol or pickle.HIGHEST_PROTOCOL
+
+
 @functools.lru_cache(maxsize=None)
-def _hash_integrity_intact():
-    logging.warning(f"Hash integrity problem. Bypassing pickledonion caching.")
-    return _get_hash(_TEST_OBJ) == _TEST_HASH
+def _hash_integrity_intact(protocol):
+    test_obj, expected_hash = _hash_integrity_values()
+    return _get_hash(test_obj, protocol) == expected_hash
 
 
-_TEST_OBJ = (1,2,3,4,"a","b","c","d")
-_TEST_HASH = "3aa9afff3e2a9fb63fead865517905583078f3f72bda3e22f8771a61"
+@cacheable()
+def _hash_integrity_values():
+    assert CacheContext.current is not None
+    test_obj = (1,2,3,4,"a","b","c","d")
+    test_hash = _get_hash(test_obj, CacheContext.current.pickle_protocol)
+    return test_obj, test_hash
